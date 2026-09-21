@@ -6,7 +6,7 @@
     https://github.com/Footagesus/WindUI
 ]]
 
---build 2.2
+--build 2.3
 
 type ConfigType__DARKLUA_TYPE_a={
 Object:Instance,
@@ -513,6 +513,7 @@ TabIconTransparencyActive=0.1,
 TabBorderTransparency=1,
 TabBorderTransparencyActive=0.75,
 TabBorder="White",
+TabUnderline="Accent",
 
 ElementBackground="Text",
 ElementBackgroundTransparency=0.93,
@@ -764,9 +765,12 @@ return x
 end
 
 function r.DisconnectAll()
-for u,v in next,r.Signals do
-local x=table.remove(r.Signals,u)
+local Signals=r.Signals
+r.Signals={}
+for _,x in ipairs(Signals) do
+pcall(function()
 x:Disconnect()
+end)
 end
 end
 
@@ -10517,10 +10521,15 @@ end
 aq.Size=UDim2.new(1,at,0,0)
 end
 
+local a0=am.Parent
+if am.ParentType=="Tab"and am.Tab and am.Tab.ColumnFlow then
+a0=am.Tab.ColumnFlow:Request(an)
+end
+
 local at=aa.NewRoundFrame(am.Window.ElementConfig.UICorner,"Squircle",{
 Size=UDim2.new(1,0,0,0),
 BackgroundTransparency=1,
-Parent=am.Parent,
+Parent=a0,
 
 AutomaticSize="Y",
 ThemeTag={
@@ -11601,8 +11610,8 @@ ar.Index=as
 
 ar.UIElements.Main=ak.NewRoundFrame(ar.UICorner,"Squircle",{
 BackgroundTransparency=1,
-Size=UDim2.new(1,-7,0,0),
-AutomaticSize="Y",
+Size=UDim2.new(0,0,0,32),
+AutomaticSize="X",
 Parent=ap.Parent,
 ThemeTag={
 ImageColor3="TabBackground",
@@ -11623,19 +11632,9 @@ Name="Outline",
 
 
 
-
-
-
-
-
-
-
-
-
 }),
 ak.NewRoundFrame(ar.UICorner,"Squircle",{
-Size=UDim2.new(1,0,0,0),
-AutomaticSize="Y",
+Size=UDim2.new(1,0,1,0),
 ThemeTag={
 ImageColor3="Text",
 },
@@ -11644,7 +11643,7 @@ Name="Frame",
 },{
 al("UIListLayout",{
 SortOrder="LayoutOrder",
-Padding=UDim.new(0,2+(Window.UIPadding/2)),
+Padding=UDim.new(0,6),
 FillDirection="Horizontal",
 VerticalAlignment="Center",
 }),
@@ -11655,21 +11654,13 @@ TextColor3="TabTitle",
 },
 TextTransparency=not ar.Locked and 0.4 or 0.7,
 TextSize=15,
-Size=UDim2.new(1,0,0,0),
+Size=UDim2.new(0,0,0,0),
 FontFace=Font.new(ak.Font,Enum.FontWeight.Medium),
-TextWrapped=true,
 RichText=true,
-AutomaticSize="Y",
+AutomaticSize="XY",
 LayoutOrder=2,
 TextXAlignment="Left",
 BackgroundTransparency=1,
-},{
-al("UIPadding",{
-PaddingTop=UDim.new(0,ar.TitlePaddingY),
-
-
-PaddingBottom=UDim.new(0,ar.TitlePaddingY),
-}),
 }),
 al("UIPadding",{
 PaddingTop=UDim.new(0,ar.TabPaddingY),
@@ -11677,6 +11668,19 @@ PaddingLeft=UDim.new(0,ar.TabPaddingX),
 PaddingRight=UDim.new(0,ar.TabPaddingX),
 PaddingBottom=UDim.new(0,ar.TabPaddingY),
 }),
+}),
+al("Frame",{
+Name="Underline",
+ThemeTag={
+BackgroundColor3="TabUnderline",
+},
+BackgroundColor3=Color3.new(1,1,1),
+BorderSizePixel=0,
+Size=UDim2.new(1,-6,0,2),
+Position=UDim2.new(0.5,0,1,1),
+AnchorPoint=Vector2.new(0.5,1),
+Visible=false,
+ZIndex=5,
 }),
 },true)
 
@@ -11704,7 +11708,7 @@ au.Parent=ar.UIElements.Main.Frame
 ar.UIElements.Icon=au
 au.ImageLabel.ImageTransparency=not ar.Locked and 0 or 0.7
 at=-18-(Window.UIPadding/2)
-ar.UIElements.Main.Frame.TextLabel.Size=UDim2.new(1,at,0,0)
+ar.UIElements.Main.Frame.TextLabel.Size=UDim2.new(0,0,0,0)
 elseif ar.IconColor then
 ak.NewRoundFrame(
 ar.IconShape~="Circle"and(ar.UICorner+5-(2+(Window.UIPadding/4)))or 9999,
@@ -11750,7 +11754,7 @@ au.Position=UDim2.new(0.5,0,0.5,0)
 au.ImageLabel.ImageTransparency=0
 au.ImageLabel.ImageColor3=ak.GetTextColorForHSB(ar.IconColor,0.68)
 at=-28-(Window.UIPadding/2)
-ar.UIElements.Main.Frame.TextLabel.Size=UDim2.new(1,at,0,0)
+ar.UIElements.Main.Frame.TextLabel.Size=UDim2.new(0,0,0,0)
 end
 
 av=
@@ -11787,11 +11791,61 @@ SortOrder="LayoutOrder",
 Padding=UDim.new(0,ar.Gap),
 HorizontalAlignment="Center",
 }),
+al("Frame",{
+Name="Columns",
+BackgroundTransparency=1,
+Size=UDim2.new(1,0,0,0),
+AutomaticSize="Y",
+LayoutOrder=1,
+},{
+al("UIListLayout",{
+FillDirection="Horizontal",
+Padding=UDim.new(0,ar.Gap*2),
+SortOrder="LayoutOrder",
+}),
+al("Frame",{
+Name="Left",
+BackgroundTransparency=1,
+Size=UDim2.new(0.5,-ar.Gap,0,0),
+AutomaticSize="Y",
+LayoutOrder=1,
+},{
+al("UIListLayout",{
+SortOrder="LayoutOrder",
+Padding=UDim.new(0,ar.Gap),
+}),
+}),
+al("Frame",{
+Name="Right",
+BackgroundTransparency=1,
+Size=UDim2.new(0.5,-ar.Gap,0,0),
+AutomaticSize="Y",
+LayoutOrder=2,
+},{
+al("UIListLayout",{
+SortOrder="LayoutOrder",
+Padding=UDim.new(0,ar.Gap),
+}),
+}),
+}),
 })
 
 
 
 
+
+local colWeights={0,0}
+ar.ColumnFlow={
+Request=function(aA,aB)
+local aC=48+(#aB.Elements+1)*40
+local aD=1
+if colWeights[2]<colWeights[1]then
+aD=2
+end
+colWeights[aD]=colWeights[aD]+aC
+return aD==1 and ar.UIElements.ContainerFrame.Columns.Left or ar.UIElements.ContainerFrame.Columns.Right
+end,
+}
 
 ar.UIElements.ContainerFrameCanvas=al("Frame",{
 Size=UDim2.new(1,0,1,0),
@@ -12101,14 +12155,6 @@ ao.SelectedTab=aq
 
 for ar,as in next,ao.Tabs do
 if not as.Locked then
-ak.SetThemeTag(as.UIElements.Main,{
-ImageTransparency="TabBorderTransparency",
-},0.15)
-if as.Border then
-ak.SetThemeTag(as.UIElements.Main.Outline,{
-ImageTransparency="TabBorderTransparency",
-},0.15)
-end
 ak.SetThemeTag(as.UIElements.Main.Frame.TextLabel,{
 TextTransparency="TabTextTransparency",
 },0.15)
@@ -12117,17 +12163,11 @@ ak.SetThemeTag(as.UIElements.Icon.ImageLabel,{
 ImageTransparency="TabIconTransparency",
 },0.15)
 end
+if as.UIElements.Main.Underline then
+as.UIElements.Main.Underline.Visible=false
+end
 as.Selected=false
 end
-end
-ak.SetThemeTag(ao.Tabs[aq].UIElements.Main,{
-ImageColor3="TabBackgroundActive",
-ImageTransparency="TabBackgroundActiveTransparency",
-},0.15)
-if ao.Tabs[aq].Border then
-ak.SetThemeTag(ao.Tabs[aq].UIElements.Main.Outline,{
-ImageTransparency="TabBorderTransparencyActive",
-},0.15)
 end
 ak.SetThemeTag(ao.Tabs[aq].UIElements.Main.Frame.TextLabel,{
 TextTransparency="TabTextTransparencyActive",
@@ -12137,7 +12177,11 @@ ak.SetThemeTag(ao.Tabs[aq].UIElements.Icon.ImageLabel,{
 ImageTransparency="TabIconTransparencyActive",
 },0.15)
 end
+if ao.Tabs[aq].UIElements.Main.Underline then
+ao.Tabs[aq].UIElements.Main.Underline.Visible=true
+end
 ao.Tabs[aq].Selected=true
+
 
 task.spawn(function()
 for ar,as in next,ao.Containers do
@@ -12153,6 +12197,7 @@ AnchorPoint=Vector2.new(0,0),
 })
 at:Play()
 end)
+
 
 ao.OnChangeFunc(aq)
 end
@@ -13144,7 +13189,7 @@ aw.User.Enabled and-aw.Topbar.Height-42-(aw.UIPadding*2)or-aw.Topbar.Height
 ),
 Position=UDim2.new(0,0,0,aw.Topbar.Height),
 BackgroundTransparency=1,
-Visible=true,
+Visible=false,
 },{
 ao("Frame",{
 Name="Content",
@@ -13166,8 +13211,27 @@ av.VanishUI
 )
 end
 
+aw.UIElements.TabBar=ao("Frame",{
+Size=UDim2.new(1,0,0,36),
+Position=UDim2.new(0,0,0,aw.Topbar.Height),
+BackgroundTransparency=1,
+Active=true,
+Name="TabBar",
+},{
+ao("UIListLayout",{
+FillDirection="Horizontal",
+SortOrder="LayoutOrder",
+VerticalAlignment="Center",
+Padding=UDim.new(0,aw.UIPadding+6),
+}),
+ao("UIPadding",{
+PaddingLeft=UDim.new(0,aw.UIPadding/2),
+PaddingRight=UDim.new(0,aw.UIPadding/2),
+}),
+})
+
 aw.UIElements.MainBar=ao("Frame",{
-Size=UDim2.new(1,-aw.UIElements.SideBarContainer.AbsoluteSize.X,1,-aw.Topbar.Height),
+Size=UDim2.new(1,0,1,-(aw.Topbar.Height+36)),
 Position=UDim2.new(1,0,1,0),
 AnchorPoint=Vector2.new(1,1),
 BackgroundTransparency=1,
@@ -13642,7 +13706,7 @@ ZIndex=97,
 ao("UICorner",{
 CornerRadius=UDim.new(0,aw.UICorner),
 }),
-aw.UIElements.SideBarContainer,
+aw.UIElements.TabBar,
 aw.UIElements.MainBar,
 
 d,
@@ -13951,9 +14015,18 @@ end
 
 
 
+if aw.User and aw.User.Enabled and d then
+d.Parent=aw.UIElements.Main.Main.Topbar.Right
+d.Size=UDim2.new(0,0,0,42)
+d.AutomaticSize="X"
+d.AnchorPoint=Vector2.new(0,0.5)
+d.Position=UDim2.new(0,0,0.5,0)
+d.LayoutOrder=500
+end
+
 local z=an.Drag(
 aw.UIElements.Main,
-{aw.UIElements.Main.Main.Topbar,r.Frame},
+{aw.UIElements.Main.Main.Topbar,aw.UIElements.TabBar,r.Frame},
 function(z,A)
 if not aw.Closed then
 if z and A==r.Frame then
@@ -14573,7 +14646,7 @@ end)
 aw.TabModule=G
 
 function aw.Tab(H,J)
-J.Parent=aw.UIElements.SideBar.Frame
+J.Parent=aw.UIElements.TabBar
 return G.New(J,av.VanishUI.UIScale)
 end
 
@@ -15042,9 +15115,9 @@ local R=false
 
 
 
-local S=aq("Search","search",aw.UIElements.SideBarContainer,true)
-S.Size=UDim2.new(1,-aw.UIPadding/2,0,39)
-S.Position=UDim2.new(0,aw.UIPadding/2,0,0)
+local S=aq("Search","search",aw.UIElements.Main.Main.Topbar.Right,true)
+S.Size=UDim2.new(0,39,0,39)
+S.LayoutOrder=999
 
 an.AddSignal(S.MouseButton1Click,function()
 if R then
