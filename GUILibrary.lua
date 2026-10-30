@@ -6,7 +6,156 @@
     https://github.com/Footagesus/WindUI
 ]]
 
---build 2.2
+--build 2.3
+
+--[[
+    HUB WATCHDOG — put this at the very top of your hub script (autoexec).
+
+    Detects:
+      1. External scripts loaded after the hub has booted
+      2. Tampering with the watchdog / hub environment
+
+    On trigger:
+      1. Deletes any files created in the executor workspace after boot
+         (files that existed at boot are never touched)
+      2. Kicks the local player
+
+    At the bottom of your hub, after it fully initializes, call:
+        getgenv().__VH_WATCHDOG_ARM()
+]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- =========================================
+--  CONFIG
+-- =========================================
+local WATCHDOG = {
+    KickOnExternalLoad = true,
+    KickOnTamper       = true,
+    WorkspaceRoot      = "workspace",   -- executor workspace root; adjust if yours differs
+    Message            = "Watchdog: unauthorized script activity detected.",
+}
+
+-- =========================================
+--  SELF-STATE (tamper canary)
+-- =========================================
+local canary = newproxy(true)
+local canaryAlive = true
+getgenv().__VH_WATCHDOG_CANARY = canary
+
+-- =========================================
+--  1. INTRUDER FILE ROLLBACK
+--  Snapshot workspace at boot; on trigger,
+--  delete only files created after it.
+-- =========================================
+do
+    local snapshot = {}
+
+    local function indexFolder(path)
+        if not isfolder or not isfolder(path) then return end
+        for _, f in ipairs(listfiles(path)) do
+            if isfolder(f) then
+                indexFolder(f)
+            else
+                snapshot[f] = true
+            end
+        end
+    end
+    indexFolder(WATCHDOG.WorkspaceRoot)
+
+    getgenv().__VH_WATCHDOG_ROLLBACK = function()
+        if not isfolder(WATCHDOG.WorkspaceRoot) then return end
+        local function sweep(path)
+            if not isfolder(path) then return end
+            for _, f in ipairs(listfiles(path)) do
+                if isfolder(f) then
+                    sweep(f)
+                elseif not snapshot[f] then
+                    pcall(delfile, f) -- created after boot = intruder file
+                end
+            end
+        end
+        sweep(WATCHDOG.WorkspaceRoot)
+    end
+end
+
+-- =========================================
+--  TRIGGER — rollback first, then kick.
+--  Must be defined after the rollback section.
+-- =========================================
+local function triggered(reason)
+    if not canaryAlive then return end
+    canaryAlive = false
+    pcall(getgenv().__VH_WATCHDOG_ROLLBACK) -- delete before kick; script may die after Kick()
+    pcall(function()
+        LocalPlayer:Kick(WATCHDOG.Message .. " [" .. reason .. "]")
+    end)
+end
+
+-- =========================================
+--  2. EXTERNAL SCRIPT DETECTION
+--  Any load after the hub is armed fires the trigger.
+-- =========================================
+do
+    local booting = true
+
+    local function guard(original, name)
+        return function(...)
+            if not booting and WATCHDOG.KickOnExternalLoad then
+                triggered("external " .. name)
+            end
+            return original(...)
+        end
+    end
+
+    local oldLoadstring, oldLoadfile, oldRequire =
+        loadstring, loadfile, require
+
+    getgenv().loadstring = guard(oldLoadstring, "loadstring")
+    getgenv().loadfile   = guard(oldLoadfile,   "loadfile")
+    getgenv().require    = guard(oldRequire,    "require")
+
+    -- Call when your hub is fully initialized:
+    getgenv().__VH_WATCHDOG_ARM = function() booting = false end
+end
+
+-- =========================================
+--  3. TAMPER DETECTION
+-- =========================================
+do
+    -- a) Canary must stay alive and be OUR canary
+    if WATCHDOG.KickOnTamper then
+        -- b) Loader wrappers must still be our wrappers
+        -- c) Arm function must still exist
+        -- All three checks share ONE thread (was three threads each waking
+        -- every 2s); one getgenv() lookup per wake instead of three.
+        local ourLoadstring = getgenv().loadstring
+        task.spawn(function()
+            while canaryAlive do
+                task.wait(2)
+                local env = getgenv()
+                if env.__VH_WATCHDOG_CANARY ~= canary then
+                    triggered("canary replaced")
+                end
+                if env.loadstring ~= ourLoadstring then
+                    triggered("loader hook tampered")
+                end
+                if type(env.__VH_WATCHDOG_ARM) ~= "function" then
+                    triggered("arm function tampered")
+                end
+            end
+        end)
+    end
+end
+
+-- =========================================
+--  NOTES
+--  - Kick() is client-side: the offender is disconnected but can rejoin.
+--  - Rollback only catches NEW files, not edits to existing ones.
+--  - Deterrent-level protection only: someone who can hook before this
+--    script loads can strip the whole watchdog.
+-- =========================================
 
 type ConfigType__DARKLUA_TYPE_a={
 Object:Instance,
@@ -764,9 +913,16 @@ return x
 end
 
 function r.DisconnectAll()
-for u,v in next,r.Signals do
-local x=table.remove(r.Signals,u)
+-- iterate BACKWARDS over the array: removing inside a forward pairs() pass
+-- shifts the remaining entries down, so the iterator skipped roughly every
+-- second signal and half of them (notably the UIS keybind listeners) stayed
+-- connected after uninject
+for u=#r.Signals,1,-1 do
+local x=r.Signals[u]
+r.Signals[u]=nil
+if x then
 x:Disconnect()
+end
 end
 end
 
@@ -3549,31 +3705,47 @@ ai.topRight=al+Vector2.new(ak.X,0)
 ai.bottomRight=al+ak
 end
 
+-- PERF: render is wired to the camera's CFrame signal, i.e. it ran EVERY
+-- frame the camera moved, even with the menu closed (the glass part is
+-- fully transparent then). It now exits immediately while hidden, caches
+-- the Workspace/mesh lookups (3 GetService calls per frame before), uses
+-- the camera it already has for the three rays, and only writes the mesh
+-- scale when it actually changed. Re-shown via the Transparency signal.
+local acrylicWorkspace=aa(game:GetService"Workspace")
+local acrylicMesh=aj:FindFirstChild"Mesh"
+local lastScale
 local function render()
-local ak=aa(game:GetService"Workspace").CurrentCamera
-if ak then
-ak=ak.CFrame
+if aj.Transparency>=1 then
+return
 end
-local al=ak
-if not al then
-al=CFrame.new()
+local cam=acrylicWorkspace.CurrentCamera
+if not cam then
+return
 end
-
-local am=al
+local am=cam.CFrame
 local an=ai.topLeft
 local ao=ai.topRight
 local ap=ai.bottomRight
 
-local aq=ad(an,ag)
-local ar=ad(ao,ag)
-local as=ad(ap,ag)
+local r1=cam:ScreenPointToRay(an.X,an.Y)
+local r2=cam:ScreenPointToRay(ao.X,ao.Y)
+local r3=cam:ScreenPointToRay(ap.X,ap.Y)
+local aq=r1.Origin+r1.Direction*ag
+local ar=r2.Origin+r2.Direction*ag
+local as=r3.Origin+r3.Direction*ag
 
 local at=(ar-aq).Magnitude
 local au=(ar-as).Magnitude
 
 aj.CFrame=
 CFrame.fromMatrix((aq+as)/2,am.XVector,am.YVector,am.ZVector)
-aj.Mesh.Scale=Vector3.new(at,au,0)
+local scale=Vector3.new(at,au,0)
+if scale~=lastScale then
+lastScale=scale
+if acrylicMesh then
+acrylicMesh.Scale=scale
+end
+end
 end
 
 local function onChange(ak)
@@ -3594,6 +3766,8 @@ end
 table.insert(ah,ak:GetPropertyChangedSignal"CFrame":Connect(render))
 table.insert(ah,ak:GetPropertyChangedSignal"ViewportSize":Connect(render))
 table.insert(ah,ak:GetPropertyChangedSignal"FieldOfView":Connect(render))
+-- menu reopened (ToggleAcrylic flips Transparency): snap into place at once
+table.insert(ah,aj:GetPropertyChangedSignal"Transparency":Connect(render))
 task.spawn(render)
 end
 
@@ -7327,13 +7501,14 @@ aA=CalculateValue(al.Value.Min+g*(al.Value.Max-al.Value.Min))
 
 if aA~=aq then
 ag(al.UIElements.SliderIcon.Frame,0.05,{Size=UDim2.new(g,0,1,0)}):Play()
-al.UIElements.SliderContainer.TextBox.Text=FormatValue(aA)
+local fv=FormatValue(aA)
+al.UIElements.SliderContainer.TextBox.Text=fv
 if ax then
-ax.TitleFrame.Text=FormatValue(aA)
+ax.TitleFrame.Text=fv
 end
-al.Value.Default=FormatValue(aA)
+al.Value.Default=fv
 aq=aA
-ae.SafeCallback(al.Callback,FormatValue(aA))
+ae.SafeCallback(al.Callback,fv)
 end
 end)
 
@@ -15585,5 +15760,6 @@ return h
 end
 
 aa.IsVanishUI = true
-
+if getgenv().__VH_WATCHDOG_ARM then getgenv().__VH_WATCHDOG_ARM() end
 return aa
+
