@@ -6,7 +6,7 @@
     https://github.com/Footagesus/WindUI
 ]]
 
---build 2.3
+--build 2.4
 
 --[[
     HUB WATCHDOG — put this at the very top of your hub script (autoexec).
